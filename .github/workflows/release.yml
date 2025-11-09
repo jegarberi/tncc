@@ -38,6 +38,52 @@ jobs:
           # Windows AMD64
           CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o tncc-windows-amd64.exe tncc.go
 
+      - name: Build Debian packages
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+
+          # Build amd64 .deb
+          mkdir -p tncc-deb-amd64/DEBIAN
+          mkdir -p tncc-deb-amd64/usr/bin
+          cp tncc-linux-amd64 tncc-deb-amd64/usr/bin/tncc
+          chmod +x tncc-deb-amd64/usr/bin/tncc
+
+          cat > tncc-deb-amd64/DEBIAN/control << EOF
+          Package: tncc
+          Version: ${VERSION}
+          Section: net
+          Priority: optional
+          Architecture: amd64
+          Maintainer: TNCC Maintainers
+          Description: Terminal Network Connection Client for Juniper VPN
+           A Go implementation of TNCC for interacting with Juniper VPN endpoints.
+           Performs policy checks and retrieves authentication cookies.
+          EOF
+
+          dpkg-deb --build tncc-deb-amd64
+          mv tncc-deb-amd64.deb tncc_${VERSION}_amd64.deb
+
+          # Build arm64 .deb
+          mkdir -p tncc-deb-arm64/DEBIAN
+          mkdir -p tncc-deb-arm64/usr/bin
+          cp tncc-linux-arm64 tncc-deb-arm64/usr/bin/tncc
+          chmod +x tncc-deb-arm64/usr/bin/tncc
+
+          cat > tncc-deb-arm64/DEBIAN/control << EOF
+          Package: tncc
+          Version: ${VERSION}
+          Section: net
+          Priority: optional
+          Architecture: arm64
+          Maintainer: TNCC Maintainers
+          Description: Terminal Network Connection Client for Juniper VPN
+           A Go implementation of TNCC for interacting with Juniper VPN endpoints.
+           Performs policy checks and retrieves authentication cookies.
+          EOF
+
+          dpkg-deb --build tncc-deb-arm64
+          mv tncc-deb-arm64.deb tncc_${VERSION}_arm64.deb
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
@@ -47,6 +93,8 @@ jobs:
             tncc-darwin-amd64
             tncc-darwin-arm64
             tncc-windows-amd64.exe
+            tncc_*_amd64.deb
+            tncc_*_arm64.deb
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
