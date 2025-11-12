@@ -132,6 +132,69 @@ jobs:
           rpmbuild --target aarch64 -bb ~/rpmbuild/SPECS/tncc.spec
           cp ~/rpmbuild/RPMS/aarch64/tncc-${VERSION}-1.aarch64.rpm ./
 
+      - name: Create self-extracting runners
+        run: |
+          # Function to create self-extracting script
+          create_runner() {
+            local binary=$1
+            local output=$2
+            local platform=$3
+
+            cat > "${output}" << 'RUNNER_EOF'
+          #!/bin/sh
+          # Self-extracting runner for TNCC
+          # Compatible with Android/Termux and standard Linux/macOS environments
+
+          # Create temporary directory for extraction
+          # Try mktemp first, fall back to manual creation for Android/Termux
+          if command -v mktemp >/dev/null 2>&1; then
+            TMPDIR=$(mktemp -d 2>/dev/null || mktemp -d -t tncc)
+          else
+            TMPDIR="${TMPDIR:-/data/local/tmp}/tncc.$$"
+            mkdir -p "$TMPDIR" 2>/dev/null || TMPDIR="/tmp/tncc.$$"
+            mkdir -p "$TMPDIR"
+          fi
+
+          # Cleanup function
+          cleanup() {
+            rm -rf "$TMPDIR"
+          }
+          trap cleanup EXIT INT TERM
+
+          # Find the binary data marker
+          # Use sed as it's more portable than awk on Android
+          MARKER=$(sed -n '/^__BINARY_DATA__/=' "$0" | head -n 1)
+          MARKER=$((MARKER + 1))
+
+          # Extract binary to temp directory
+          # Try base64 -d first (GNU/Linux), then base64 -D (macOS), then base64 without flags (Android)
+          if tail -n +$MARKER "$0" | base64 -d > "$TMPDIR/tncc" 2>/dev/null; then
+            :
+          elif tail -n +$MARKER "$0" | base64 -D > "$TMPDIR/tncc" 2>/dev/null; then
+            :
+          else
+            tail -n +$MARKER "$0" | base64 > "$TMPDIR/tncc"
+          fi
+
+          chmod +x "$TMPDIR/tncc"
+
+          # Execute the binary with all passed arguments
+          exec "$TMPDIR/tncc" "$@"
+
+          __BINARY_DATA__
+          RUNNER_EOF
+
+            # Append base64-encoded binary
+            base64 "$binary" >> "${output}"
+            chmod +x "${output}"
+          }
+
+          # Create runners for each platform
+          create_runner "tncc-linux-amd64" "tncc-runner-linux-amd64.sh" "linux-amd64"
+          create_runner "tncc-linux-arm64" "tncc-runner-linux-arm64.sh" "linux-arm64"
+          create_runner "tncc-darwin-amd64" "tncc-runner-darwin-amd64.sh" "darwin-amd64"
+          create_runner "tncc-darwin-arm64" "tncc-runner-darwin-arm64.sh" "darwin-arm64"
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
@@ -145,6 +208,10 @@ jobs:
             tncc_*_arm64.deb
             tncc-*-1.x86_64.rpm
             tncc-*-1.aarch64.rpm
+            tncc-runner-linux-amd64.sh
+            tncc-runner-linux-arm64.sh
+            tncc-runner-darwin-amd64.sh
+            tncc-runner-darwin-arm64.sh
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
