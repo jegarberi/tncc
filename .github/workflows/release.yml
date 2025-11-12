@@ -105,6 +105,10 @@ jobs:
           License: MIT
           URL: https://github.com/username/tncc
 
+          # Disable automatic debuginfo and stripping for cross-compiled binaries
+          %global debug_package %{nil}
+          %global __os_install_post %{nil}
+
           %description
           A Go implementation of TNCC for interacting with Juniper VPN endpoints.
           Performs policy checks and retrieves authentication cookies.
