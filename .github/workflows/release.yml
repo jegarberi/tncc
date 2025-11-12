@@ -84,6 +84,54 @@ jobs:
           dpkg-deb --build tncc-deb-arm64
           mv tncc-deb-arm64.deb tncc_${VERSION}_arm64.deb
 
+      - name: Build RPM packages
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+
+          # Install rpm build tools
+          sudo apt-get update
+          sudo apt-get install -y rpm
+
+          # Build x86_64 .rpm
+          mkdir -p tncc-rpm-x86_64/usr/bin
+          cp tncc-linux-amd64 tncc-rpm-x86_64/usr/bin/tncc
+          chmod +x tncc-rpm-x86_64/usr/bin/tncc
+
+          cat > tncc.spec << EOF
+          Name: tncc
+          Version: ${VERSION}
+          Release: 1
+          Summary: Terminal Network Connection Client for Juniper VPN
+          License: MIT
+          URL: https://github.com/username/tncc
+
+          %description
+          A Go implementation of TNCC for interacting with Juniper VPN endpoints.
+          Performs policy checks and retrieves authentication cookies.
+
+          %install
+          mkdir -p %{buildroot}/usr/bin
+          cp %{_sourcedir}/tncc %{buildroot}/usr/bin/tncc
+
+          %files
+          /usr/bin/tncc
+          EOF
+
+          mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+          cp tncc.spec ~/rpmbuild/SPECS/
+          cp tncc-rpm-x86_64/usr/bin/tncc ~/rpmbuild/SOURCES/
+          rpmbuild --target x86_64 -bb ~/rpmbuild/SPECS/tncc.spec
+          cp ~/rpmbuild/RPMS/x86_64/tncc-${VERSION}-1.x86_64.rpm ./
+
+          # Build aarch64 .rpm
+          mkdir -p tncc-rpm-aarch64/usr/bin
+          cp tncc-linux-arm64 tncc-rpm-aarch64/usr/bin/tncc
+          chmod +x tncc-rpm-aarch64/usr/bin/tncc
+
+          cp tncc-rpm-aarch64/usr/bin/tncc ~/rpmbuild/SOURCES/
+          rpmbuild --target aarch64 -bb ~/rpmbuild/SPECS/tncc.spec
+          cp ~/rpmbuild/RPMS/aarch64/tncc-${VERSION}-1.aarch64.rpm ./
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
@@ -95,6 +143,8 @@ jobs:
             tncc-windows-amd64.exe
             tncc_*_amd64.deb
             tncc_*_arm64.deb
+            tncc-*-1.x86_64.rpm
+            tncc-*-1.aarch64.rpm
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
